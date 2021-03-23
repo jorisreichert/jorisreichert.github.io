@@ -52,14 +52,87 @@
 						<!-- Content -->
 							<div class="wrapper">
 								<div class="inner">
+									<h2 class="major">The tutorial
+									</h2>
+									<h3>WordCount</h3>
+									<p>
+									Welcome to my blogpost ond Hello_Hadoop. This first section describes how I worked through the tutorial and includes some notes for myself that I will probably use for later assignments.</p>
+									<p>Following the steps of the tutorial was quite easy. The only issue I encountered was when I tried to run the WordCount code, as I already had an output directory. As I was already in the folder where the input and output folders were located (in /opt/hadoop) I removed this using the following command:<pre><code>hadoop fs -rm -r output/</code></pre>
+									After this I could attempt to run the WordCount code again by doing:
+									<pre><code>hadoop jar wc.jar WordCount input output</code></pre></p>
 
-									<h3 class="major">Lorem ipsum dolor</h3>
-									<p>Morbi mattis mi consectetur tortor elementum, varius pellentesque velit convallis. Aenean tincidunt lectus auctor mauris maximus, ac scelerisque ipsum tempor. Duis vulputate ex et ex tincidunt, quis lacinia velit aliquet. Duis non efficitur nisi, id malesuada justo. Maecenas sagittis felis ac sagittis semper. Curabitur purus leo donec vel dolor at arcu tincidunt bibendum. Interdum et malesuada fames ac ante ipsum primis in faucibus. Fusce ut aliquet justo. Donec id neque ipsum. Integer eget ultricies odio. Nam vel ex a orci fringilla tincidunt. Aliquam eleifend ligula non velit accumsan cursus. Etiam ut gravida sapien.</p>
+									<p>Once hadoop is finished, we have to do a few more steps to analyse the output.
+									First, we want to write the output from the HDFS filesystem to the docker container. All output is written in the output folder. In it we find two files: One empty file titled _SUCCESS that indicates the program has succeeded, and one 'file' that contains the output titled part-r-00000
+									To retrieve this file from the HDFS we do:
+									<pre><code>hdfs dfs -get output/part-r-00000 output-file</code></pre>
 
-									<p>Vestibulum ultrices risus velit, sit amet blandit massa auctor sit amet. Sed eu lectus sem. Phasellus in odio at ipsum porttitor mollis id vel diam. Praesent sit amet posuere risus, eu faucibus lectus. Vivamus ex ligula, tempus pulvinar ipsum in, auctor porta quam. Proin nec commodo, vel scelerisque nisi scelerisque. Suspendisse id quam vel tortor tincidunt suscipit. Nullam auctor orci eu dolor consectetur, interdum ullamcorper ante tincidunt. Mauris felis nec felis elementum varius.</p>
+									Now we have the output written in the normal filesystem of our docker container in the file 'output-file'.
+									</p>
+									<p>
+									If we want to move this file from our container to our host system, we open a terminal in the location where we want to write the file and do:
+									<pre><code>sudo docker cp hello-hadoop:/opt/hadoop/output-file output-file</code></pre>
+									</p>
+									<p>
+									After having moved the output out of the hdfs, we can clear up the output from the hdfs to make room for other programs by running the following command in our docker container:
+									<pre><code>hadoop fs -rm -r output</code></pre>
+									</p>
+									<h2 class="major">Blog post questions
+									</h2>
+									<h3>Hadoop commands</h3>
+									<p>
+									<i>What happens when you run the Hadoop commands (hdfs dfs etc.) in the first part of the tutorial?</i>
+									</p>
+									<p>
+									There are several hdfs commands we used in the first part of the tutorial. 
+									</p>
+									<h4>
+									hdfs dfs
+									</h4>
+									<p>
+									The hdfs dfs command can be used to interact with the hadoop filesystem. It runs a filesystem command with which you can put files from your environment in the hdfs and vice versa. To put files from our environment in hdfs we have used:
+									<pre><code>hdfs dfs -put 100.txt input</code></pre>
+									The -put flag indicates that we want to put the first file (here: 100.txt) into the hdfs in a folder which as a name has the last argument (here: input). We have also done it the other way around to retrieve output from the hdfs to our environment:
+									<pre><code>hdfs dfs -get output/part-r-00000 output-file1</code></pre>
+									The -get flag indicates that we want to get the first file (here: output/part-r-00000) from the hdfs to our environment and write the output in the second file (here: output-file1).
+									</p>
 
-									<h3 class="major">Vitae phasellus</h3>
-									<p>Cras mattis ante fermentum, malesuada neque vitae, eleifend erat. Phasellus non pulvinar erat. Fusce tincidunt, nisl eget mattis egestas, purus ipsum consequat orci, sit amet lobortis lorem lacus in tellus. Sed ac elementum arcu. Quisque placerat auctor laoreet.</p>
+									<h3>Mapreduce linecount</h3>
+									<p>
+									<i>How do you use mapreduce to count the number of lines/words/characters/… in the Complete Shakespeare?</i>
+									Inspection of the corpus shows us this is kind of a tricky question, because the input document has an informative header and a legal tail in the text file. Normally I would remove those parts before running the program but for I suppose we weren't expected to and assumed most people wouldn't have noticed this anyway. In addition to this being less effort, it probably allows my peer reviewers to better compare my result to their own. I modified the mapper to skip empty lines and it looks like this:
+									</p>
+									<img src="images/LineCount-mapper.png" alt="Linecount mapper code"/>
+									<p>
+									After taking the file out of the hdfs as described above we printed its content:
+									<pre><code>cat output-file_LineCount 
+Nr of lines: 	130725</code></pre>
+
+
+									</p>
+
+									<h3>Romeo and Juliet</h3>
+									<p>
+									<i>Does Romeo or Juliet appear more often in the plays? ++ Can you answer this question making only one pass over the corpus?</i>
+
+									Upon inspection of the corpus of 100.txt (the entire works of William Shakespeare) we see that names can be written in a variety of ways depending on the use. In a play an appearance can be seen as either:
+									<ul>
+									<li>Entering the stage, eg. [Enter Juliet.]</li>
+									<li>Speaking, indicated by a name in capital letters followed by a period, eg. ROMEO.</li>
+									</ul>
+									The first option can be harder to count as we can't be sure that every time a character enters the stage there will be a closing bracket ']' as it is possible that multiple people enter the stage simultaneously, eg. [Enter Lady Capulet, and Nurse.]
+									To prevent having to look at a bigger context we will focus on the second option.
+									To count the occurrences of Juliet and Romeo speaking we make a slight adaptation to the WordCount script as provided in the assignment. The mapper will now only write a word when the word is either 'ROMEO.' or 'JULIET.'.
+									</p>
+<pre><code>if(word.toString().compareTo("ROMEO.")==0 || word.toString().compareTo("JULIET.")==0){
+	  context.write(word, one);
+}</code></pre>
+									<p>
+									This approach requires us to pass over the corpus only once after taking the results from the hdfs we see the following occurrences:
+									<ul>
+									<li>JULIET. 125</li>
+									<li>ROMEO.  163</li>
+									</ul>
+									</p>
 
 									<!-- Referring to other articles -->
 									<!-- <section class="features">
