@@ -52,91 +52,157 @@
 						<!-- Content -->
 							<div class="wrapper">
 								<div class="inner">
-									<h2 class="major">The tutorial
+									<h2 class="major">Introduction
 									</h2>
-									<h3>NOT FINISHED BUT PEERGRADE HAND-IN CLOSES 12-04-2021 23:59</h3>
 									<p>
-									<b>
-									Expected delivery: 13-04 23:59</b> The rest of this page is a dud, a copy of my second blogpost.
+									Welcome to my third blogpost in the Big Data series. This blogpost is written to report my experiences on using Spark, or more specifically on working with Spark RDDs. I worked using Zeppelin Notebooks in the Zeppelin UI.
+									</p><p>
+									I followed <a href="https://rubigdata.github.io/course/assignments/A3-sparkling-spark.html">this assignment</a> that I was given for the Big Data course at the Radboud University. This blogpost however should be readable for anyone who wants to learn something about Spark RDDs. The notebooks I started with and the ones I ended up with are available on <a href="https://github.com/rubigdata/hey-spark-2021-jorisreichert">my github</a>.
 									</p>
-									<p>
-									Welcome to my blogpost ond Hello_Hadoop. This first section describes how I worked through the tutorial and includes some notes for myself that I will probably use for later assignments.</p>
-									<p>Following the steps of the tutorial was quite easy. The only issue I encountered was when I tried to run the WordCount code, as I already had an output directory. As I was already in the folder where the input and output folders were located (in /opt/hadoop) I removed this using the following command:<pre><code>hadoop fs -rm -r output/</code></pre>
-									After this I could attempt to run the WordCount code again by doing:
-									<pre><code>hadoop jar wc.jar WordCount input output</code></pre></p>
-
-									<p>Once hadoop is finished, we have to do a few more steps to analyse the output.
-									First, we want to write the output from the HDFS filesystem to the docker container. All output is written in the output folder. In it we find two files: One empty file titled _SUCCESS that indicates the program has succeeded, and one 'file' that contains the output titled part-r-00000
-									To retrieve this file from the HDFS we do:
-									<pre><code>hdfs dfs -get output/part-r-00000 output-file</code></pre>
-
-									Now we have the output written in the normal filesystem of our docker container in the file 'output-file'.
-									</p>
-									<p>
-									If we want to move this file from our container to our host system, we open a terminal in the location where we want to write the file and do:
-									<pre><code>sudo docker cp hello-hadoop:/opt/hadoop/output-file output-file</code></pre>
-									</p>
-									<p>
-									After having moved the output out of the hdfs, we can clear up the output from the hdfs to make room for other programs by running the following command in our docker container:
-									<pre><code>hadoop fs -rm -r output</code></pre>
-									</p>
-									<h2 class="major">Blog post questions
+									<h2 class="major">Getting started
 									</h2>
-									<h3>Hadoop commands</h3>
 									<p>
-									<i>What happens when you run the Hadoop commands (hdfs dfs etc.) in the first part of the tutorial?</i>
+									Getting started was really easy after following the first two assignments, as I now already had docker working and was somewhat familiar with it when I began exploring Spark. I could simply start by creating a container that was set up specifically for this course using the command:
+									<pre><code>docker create --name hey-spark -it -p 8080:8080 -p 9001:9001 -p 4040:4040 rubigdata/course:a3</code></pre>
+									Now, start the container using:
+									<pre><code>sudo docker start hey-spark</code></pre>
+									(Note that depending on how you installed docker or on your session using sudo might not be necessary, it is for me though)
 									</p>
 									<p>
-									There are several hdfs commands we used in the first part of the tutorial. 
-									</p>
-									<h4>
-									hdfs dfs
-									</h4>
-									<p>
-									The hdfs dfs command can be used to interact with the hadoop filesystem. It runs a filesystem command with which you can put files from your environment in the hdfs and vice versa. To put files from our environment in hdfs we have used:
-									<pre><code>hdfs dfs -put 100.txt input</code></pre>
-									The -put flag indicates that we want to put the first file (here: 100.txt) into the hdfs in a folder which as a name has the last argument (here: input). We have also done it the other way around to retrieve output from the hdfs to our environment:
-									<pre><code>hdfs dfs -get output/part-r-00000 output-file1</code></pre>
-									The -get flag indicates that we want to get the first file (here: output/part-r-00000) from the hdfs to our environment and write the output in the second file (here: output-file1).
+									Now, the Zeppelin UI is accessible from <a href="http://localhost:9001/"> port 9001</a>. That's it!
 									</p>
 
-									<h3>Mapreduce linecount</h3>
-									<p>
-									<i>How do you use mapreduce to count the number of lines/words/characters/… in the Complete Shakespeare?</i>
-									Inspection of the corpus shows us this is kind of a tricky question, because the input document has an informative header and a legal tail in the text file. Normally I would remove those parts before running the program but for I suppose we weren't expected to and assumed most people wouldn't have noticed this anyway. In addition to this being less effort, it probably allows my peer reviewers to better compare my result to their own. I modified the mapper to skip empty lines and it looks like this:
-									</p>
-									<img src="images/LineCount-mapper.png" alt="Linecount mapper code"/>
-									<p>
-									After taking the file out of the hdfs as described above we printed its content:
-									<pre><code>cat output-file_LineCount 
-Nr of lines: 	130725</code></pre>
 
 
+									<h2 class="major">RDD basics
+									</h2>
+									<p>
+									The first Zeppelin notebook, A3a, introduces us to the basics of spark RDDs.</p>
+									<h3>Some basic scala programs</h3>
+									<p>
+									As is encouraged in the A3a notebook, we start of with trying some scala code. After trying some basic code, I noticed something weird with the following code:
+									<pre><code>%spark
+
+def oncePerSecond(callback: () => Unit): Unit = {
+    while (true) { callback(); Thread sleep 1000 }
+}
+
+// DO NOT RUN THE FOLLOWING LINES! SEEMS LIKE IT CAN ONLY BE CANCELED BY DELETING THIS CELL
+oncePerSecond(() =>
+  println("time flies like an arrow..."))</code></pre>
+
+									As I described in the comment in the code, I would not recommend running this. I found out (with some panic) that this code could only be stopped by deleting the entire code cell from the notebook and not by simply pressing a button to stop running the cell. This was my most noteworthy experience while trying out some scala code.</p>
+									<h3>Spark</h3>
+									<h4>Lazy evaluation & loading data</h4>
+									<p>
+									The lazy evaluation of spark becomes beautifully visual when you use the <a href="http://localhost:4040/stages/#completed">stages tab</a> of the spark UI.
+									For example, say we want to continue working on the entire works of William Shakespeare like we did in the <a href="https://jorisreichert.github.io/bigdata_blog2.html">previous blogpost</a>. Say we have the file 100.txt in hadoop in the folder /opt/hadoop and execute the following command:
+									<pre><code>%spark
+val lines = sc.textFile("file:///opt/hadoop/100.txt")</code></pre>
+									When we now check the stages tab, nothing has appeared yet. This is because spark hasn't executed anything yet, it only took notice of "in case I ever need 'lines' to give output, this is how I make 'lines'". Only when we execute 
+									<pre><code>%spark
+lines.count</code></pre>
+									We see that something has happened in the stages tab:
+									<img src="images/Lazy-eval.png" alt="Stages tab printscreen showing something has happened"/>
 									</p>
 
-									<h3>Romeo and Juliet</h3>
+									<h2 class="major">Counting words</h2>
+									<h3>Character count</h3>
+									<p>We ran a basic MapReduce program with lambda functions to count the number of characters. The code and output:
+									<pre><code>%spark
+println( "Lines:\t", lines.count, "\n" + 
+         "Chars:\t", lines.map(s => s.length).
+                           reduce((v_i, v_j) => v_i + v_j))</code></pre>
+                           			<pre><code>(Lines:	,147838,
+Chars:	,5545144)</code></pre>
+									</p>
+									<h4>Longest sentence</h4>
+									<p>With this as a basis we can write many similar programs with only slight adaptations. Here, the mapper transforms every sentence of letters in it's length in characters and the reducer adds those numbers. For example, to obtain the longest sentence we only have to change the reducer to preserve the highest of the two numbers instead of adding them. The code and output:
+									<pre><code>%spark
+println( "Lines:\t", lines.count, "\n" + 
+         "Length of longest sentence:\t", lines.map(s => s.length).
+                           reduce((v_i, v_j) => v_i max v_j))</code></pre>
+                           			<pre><code>(Lines:	,147838,
+Length of longest sentence:	,78)</code></pre>
+									</p>
+									<h3>flatMap</h3>
 									<p>
-									<i>Does Romeo or Juliet appear more often in the plays? ++ Can you answer this question making only one pass over the corpus?</i>
+									This next part can be a bit tricky for any readers who have not done a functional programming course. Let's try to make sense of the following code:
+									<pre><code>%spark
+val words = lines.flatMap(line => line.split(" "))
+              .filter(_ != "")
+              .map(word => (word,1))</code></pre>
+              						Now, readers will probably know what <code>map</code> does, but why would we use <code>flatMap</code> here instead of <code>map</code>?</p>
+              						<p>
+              						Firstly, flatMap is basically flatten after map. Now we'll have to look at what flattening is and why we would do it. As mentioned before, lines is a list of lists sentences. Each sentence is basically a list of characters. The .split function we use on each line gives us a list of lists of words, and to transform this list of lists of words into a list of words we have to flatten (remove the outer brackets and concatenate the items) once.
+              						</p>
+              						<p>
+              						<i>A small piece of advice that can be nice when working on a body of data, just run <code>datastructure.take(10)</code>, or in this case <code>lines.take(10)</code> to inspect your data.</i>
+              						</p>
+              						<h2 class="major">Punctuation</h2>
+              						<p>
+              						As I mentioned in the <a href="https://jorisreichert.github.io/bigdata_blog2.html">previous blogpost</a>, we always have to pay attention to our data to make sure the output of our commands make sense. For example, the program <code>val top10 = wc.takeOrdered(10)</code> gives the output:
+              						<pre><code>top10: Array[(String, Int)] = Array(("	Tom’s",1), (",241), ("'Tis,1), ("A,3), ("Air,",1), ("Alas,,1), ("Amen",2), ("Amen"?,1), ("Amen,",1), ("And,1))</code></pre>
+              						We wanted to make a top 10 of the most common words, but two things went wrong here. Firstly, to get a list sorted on the ASCII ordering of the words instead of on the score. Secondly, our ordering is ascending. Let's fix this:
+              						<pre><code>%spark
+val top10 = wc.takeOrdered(10)(Ordering[Int].reverse.on(x=>x._2))</code></pre>
+              						The lambda function makes sure we check the second item of the (word, count) pairing, and we also reversed the ordering. This indeed gives us the result we wanted. Let's prettify it a bit:
+              						<pre><code>%spark
+top10.map({case(w,c) => "Word '%s' occurs %d times".format(w,c)}).map(println)</code></pre>
+              						<pre><code>Word 'the' occurs 25378 times
+Word 'I' occurs 20629 times
+Word 'and' occurs 19806 times
+Word 'to' occurs 16966 times
+Word 'of' occurs 16718 times
+Word 'a' occurs 13657 times
+Word 'my' occurs 11443 times
+Word 'in' occurs 10519 times
+Word 'you' occurs 9591 times
+Word 'is' occurs 8335 times
+res9: Array[Unit] = Array((), (), (), (), (), (), (), (), (), ())</code></pre>
+              						Although this doesn't give us too much information as these are just stopwords, at least we got wat we 'wanted'.
+              						</p>
+              						<h2 class="major">How to count?</h2>
+              						<p>
+              						To finish of, we conclude with analysing a more complicated mapper:
+              						</p>
+              						<pre><code>%spark
+val words = lines.flatMap(line => line.split(" "))
+              .map(w => w.toLowerCase().replaceAll("(^[^a-z]+|[^a-z]+$)", ""))
+              .filter(_ != "")
+              .map(w => (w,1))
+              .reduceByKey( _ + _ )</code></pre>
+              						<p>And let's now output the count of occurrences of 'macbeth':</p>
+              						<pre><code>%spark
+words.filter(_._1 == "macbeth").collect
+  .map({case (w,c) => "%s occurs %d times".format(w,c)}).map(println)</code></pre>
+              						<p>Which outputs:</p>
+              						<pre><code>macbeth occurs 285 times
+res20: Array[Unit] = Array(())</code></pre>
+              						<h3>The map</h3>
+              						<p>
+              						Nice, that seems to work, but what does this all do? Let's work from the inner arguments of the mapper outwards. <code>[^a-z]</code> is a regular expression that identifies non-alphabet characters. The ^ and $ signs in <code>(^...$)</code> indicate the start and end of a string. The regular expression as a whole removes(replaces with an empty string) any non-alphabet characters that occur either before the first letter or after the last letter in a word, but preserves non-alphabet characters that occur within a word, like in the word non-alphabet.</p>
+              						<p>
+              						We also mapped al characters to lowercase and removed all empty words.
+              						</p>
 
-									Upon inspection of the corpus of 100.txt (the entire works of William Shakespeare) we see that names can be written in a variety of ways depending on the use. In a play an appearance can be seen as either:
-									<ul>
-									<li>Entering the stage, eg. [Enter Juliet.]</li>
-									<li>Speaking, indicated by a name in capital letters followed by a period, eg. ROMEO.</li>
-									</ul>
-									The first option can be harder to count as we can't be sure that every time a character enters the stage there will be a closing bracket ']' as it is possible that multiple people enter the stage simultaneously, eg. [Enter Lady Capulet, and Nurse.]
-									To prevent having to look at a bigger context we will focus on the second option.
-									To count the occurrences of Juliet and Romeo speaking we make a slight adaptation to the WordCount script as provided in the assignment. The mapper will now only write a word when the word is either 'ROMEO.' or 'JULIET.'.
-									</p>
-<pre><code>if(word.toString().compareTo("ROMEO.")==0 || word.toString().compareTo("JULIET.")==0){
-	  context.write(word, one);
-}</code></pre>
-									<p>
-									This approach requires us to pass over the corpus only once after taking the results from the hdfs we see the following occurrences:
-									<ul>
-									<li>JULIET. 125</li>
-									<li>ROMEO.  163</li>
-									</ul>
-									</p>
+              						<h3>Macbeth</h3>
+              						<p>
+              						Macbeth occurred more often than in the previous wordcount. This can be due to a variety of reasons.
+              						</p>
+              						<ul>
+              							<li>We have removed non-alphabet characters, so "Macbeth" and "Macbeth." are now counted as the same word.</li>
+              							<li>We have mapped all characters to lowercase, so now both "MACBETH" and "Macbeth" are counted as the same word. As we've seen in our inspection of the data corpus in <a href="https://jorisreichert.github.io/bigdata_blog2.html">blogpost 2</a>, the allcaps notation is used indicate when an actor speaks.</li>
+              						</ul>
+
+              						<i>That's all, folks!</i>
+              						I hope reading this blog taught you something new :)
+              						<h4>To the peers giving feedback: I really appreciate extensive/in-depth feedback!! :D</h4>
+
+
+
+
+
 
 									<!-- Referring to other articles -->
 									<!-- <section class="features">
