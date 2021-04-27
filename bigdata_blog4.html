@@ -52,20 +52,21 @@
 						<!-- Content -->
 							<div class="wrapper">
 								<div class="inner">
-									<h1>Placeholder page of previous assignment until updated blog is pushed</h1>
 									<h2 class="major">Introduction
 									</h2>
 									<p>
-									Welcome to my third blogpost in the Big Data series. This blogpost is written to report my experiences on using Spark, or more specifically on working with Spark RDDs. I worked using Zeppelin Notebooks in the Zeppelin UI.
+									Welcome to my fourth blogpost in the Big Data series. This blogpost is written to report my experiences on working with Spark SQL and the Spark Dataframe API in order to explore and analyze Open Data datasets. Just like last blogpost, I worked using Zeppelin Notebooks in the Zeppelin UI.
 									</p><p>
-									I followed <a href="https://rubigdata.github.io/course/assignments/A3-sparkling-spark.html">this assignment</a> that I was given for the Big Data course at the Radboud University. This blogpost however should be readable for anyone who wants to learn something about Spark RDDs. The notebooks I started with and the ones I ended up with are available on <a href="https://github.com/rubigdata/hey-spark-2021-jorisreichert">my github</a>.
+									I followed <a href="https://rubigdata.github.io/course/assignments/A4-open-data.html">this assignment</a> that I was given for the Big Data course at the Radboud University. This blogpost however should be readable for anyone who wants to learn something about Spark SQL and the Spark Dataframe API. The notebooks I started with and the ones I ended up with are available on <a href="https://github.com/rubigdata/open-data-2021-jorisreichert">my github</a>.
+									</p>
+									<p>
+									The data we will be working on in this blogpost (as is more closely described in notebook A4a as available on github) is <a href="https://opendata.nijmegen.nl/">open data of the city of Nijmegen</a>.
 									</p>
 									<h2 class="major">Getting started
 									</h2>
 									<p>
-									Getting started was really easy after following the first two assignments, as I now already had docker working and was somewhat familiar with it when I began exploring Spark. I could simply start by creating a container that was set up specifically for this course using the command:
-									<pre><code>docker create --name hey-spark -it -p 8080:8080 -p 9001:9001 -p 4040:4040 rubigdata/course:a3</code></pre>
-									Now, start the container using:
+									In this assignment I continued working in Zeppelin Notebooks. This was easy as I could simply follow the second and third step I did in assignment three. 
+									We start the container using:
 									<pre><code>sudo docker start hey-spark</code></pre>
 									(Note that depending on how you installed docker or on your session using sudo might not be necessary, it is for me though)
 									</p>
@@ -75,126 +76,70 @@
 
 
 
-									<h2 class="major">RDD basics
+									<h2 class="major">A4a - Data cleaning
 									</h2>
 									<p>
-									The first Zeppelin notebook, A3a, introduces us to the basics of spark RDDs.</p>
-									<h3>Some basic scala programs</h3>
+									The first Zeppelin notebook of this week, A4a, introduces us to the <code>Spark Dataset</code>, <code>Dataframe</code> and <code>Spark SQL</code>.</p>
+
+									<h3>Real-life data</h3>
 									<p>
-									As is encouraged in the A3a notebook, we start of with trying some scala code. After trying some basic code, I noticed something weird with the following code:
-									<pre><code>%spark
-
-def oncePerSecond(callback: () => Unit): Unit = {
-    while (true) { callback(); Thread sleep 1000 }
-}
-
-// DO NOT RUN THE FOLLOWING LINES! SEEMS LIKE IT CAN ONLY BE CANCELED BY DELETING THIS CELL
-oncePerSecond(() =>
-  println("time flies like an arrow..."))</code></pre>
-
-									As I described in the comment in the code, I would not recommend running this. I found out (with some panic) that this code could only be stopped by deleting the entire code cell from the notebook and not by simply pressing a button to stop running the cell. This was my most noteworthy experience while trying out some scala code.</p>
-									<h3>Spark</h3>
-									<h4>Lazy evaluation & loading data</h4>
+									Just like in the Pandas dataframes that I've worked with before, we can use <code>df.show(x)</code> to show the first x rows of dataframe <code>df</code>. This can really help to get an impression of the data you're working with.
+									</p>
 									<p>
-									The lazy evaluation of spark becomes beautifully visual when you use the <a href="http://localhost:4040/stages/#completed">stages tab</a> of the spark UI.
-									For example, say we want to continue working on the entire works of William Shakespeare like we did in the <a href="https://jorisreichert.github.io/bigdata_blog2.html">previous blogpost</a>. Say we have the file 100.txt in hadoop in the folder /opt/hadoop and execute the following command:
-									<pre><code>%spark
-val lines = sc.textFile("file:///opt/hadoop/100.txt")</code></pre>
-									When we now check the stages tab, nothing has appeared yet. This is because spark hasn't executed anything yet, it only took notice of "in case I ever need 'lines' to give output, this is how I make 'lines'". Only when we execute 
-									<pre><code>%spark
-lines.count</code></pre>
-									We see that something has happened in the stages tab:
-									<img src="images/Lazy-eval.png" alt="Stages tab printscreen showing something has happened"/>
+									Following instruction, we inspected some of the data using:<pre><code>val addrDF = bagdata.select('STRAAT, 'X_COORD, 'Y_COORD, 'WIJK_OMS)
+addrDF.show(5, false)
+addrDF.describe().show()</code></pre>
+									The last of those commands did not manage to give us a mean of either the X or Y coordinate, which may be due to missing values. This is something we can check using <code>addrDF.filter(  $"X_COORD".isNull ).count</code> which showed us that there are 45 records that don't have an x coordinate. To inspect this data, we used
+									</p><code>addrDF.filter( $"X_COORD".isNull ).show(45, false)</code><p>
+									to inspect the street, x, y, and neighbourhood data without truncation. This gave us a well-readable list that showed the absence of an x coordinate is always paired with the absence of a y-coordinate and these records seem to occur all over Nijmegen and not in just one specific neighbourhood. As this has not yet satisfied our hunger for explanation, we also took a look at all columns (this time with truncation for readability) using
+									</p><code>bagdata.filter( $"X_COORD".isNull ).show(45)</code><p>
+									Now, we were able to observe a trend for these records, namely that the value for <code>STATUS</code> would most often be "<code>Niet autenthiek</code>", whatever that means. Because we had no intention of contacting anyone for further clarification and because this data accounted for only such a small amount of records (45/96867), we decided to just filter it away by defining a <code>cleanbagdata</code> that we can use from now on instead of bagdata:<pre><code>val cleanbagdata = bagdata.filter( ! $"X_COORD".isNull )</code></pre>
 									</p>
 
-									<h2 class="major">Counting words</h2>
-									<h3>Character count</h3>
-									<p>We ran a basic MapReduce program with lambda functions to count the number of characters. The code and output:
-									<pre><code>%spark
-println( "Lines:\t", lines.count, "\n" + 
-         "Chars:\t", lines.map(s => s.length).
-                           reduce((v_i, v_j) => v_i + v_j))</code></pre>
-                           			<pre><code>(Lines:	,147838,
-Chars:	,5545144)</code></pre>
-									</p>
-									<h4>Longest sentence</h4>
-									<p>With this as a basis we can write many similar programs with only slight adaptations. Here, the mapper transforms every sentence of letters in it's length in characters and the reducer adds those numbers. For example, to obtain the longest sentence we only have to change the reducer to preserve the highest of the two numbers instead of adding them. The code and output:
-									<pre><code>%spark
-println( "Lines:\t", lines.count, "\n" + 
-         "Length of longest sentence:\t", lines.map(s => s.length).
-                           reduce((v_i, v_j) => v_i max v_j))</code></pre>
-                           			<pre><code>(Lines:	,147838,
-Length of longest sentence:	,78)</code></pre>
-									</p>
-									<h3>flatMap</h3>
+									<h3>Schema: using types</h3>
 									<p>
-									This next part can be a bit tricky for any readers who have not done a functional programming course. Let's try to make sense of the following code:
-									<pre><code>%spark
-val words = lines.flatMap(line => line.split(" "))
-              .filter(_ != "")
-              .map(word => (word,1))</code></pre>
-              						Now, readers will probably know what <code>map</code> does, but why would we use <code>flatMap</code> here instead of <code>map</code>?</p>
-              						<p>
-              						Firstly, flatMap is basically flatten after map. Now we'll have to look at what flattening is and why we would do it. As mentioned before, lines is a list of lists sentences. Each sentence is basically a list of characters. The .split function we use on each line gives us a list of lists of words, and to transform this list of lists of words into a list of words we have to flatten (remove the outer brackets and concatenate the items) once.
-              						</p>
-              						<p>
-              						<i>A small piece of advice that can be nice when working on a body of data, just run <code>datastructure.take(10)</code>, or in this case <code>lines.take(10)</code> to inspect your data.</i>
-              						</p>
-              						<h2 class="major">Punctuation</h2>
-              						<p>
-              						As I mentioned in the <a href="https://jorisreichert.github.io/bigdata_blog2.html">previous blogpost</a>, we always have to pay attention to our data to make sure the output of our commands make sense. For example, the program <code>val top10 = wc.takeOrdered(10)</code> gives the output:
-              						<pre><code>top10: Array[(String, Int)] = Array(("	Tom’s",1), (",241), ("'Tis,1), ("A,3), ("Air,",1), ("Alas,,1), ("Amen",2), ("Amen"?,1), ("Amen,",1), ("And,1))</code></pre>
-              						We wanted to make a top 10 of the most common words, but two things went wrong here. Firstly, to get a list sorted on the ASCII ordering of the words instead of on the score. Secondly, our ordering is ascending. Let's fix this:
-              						<pre><code>%spark
-val top10 = wc.takeOrdered(10)(Ordering[Int].reverse.on(x=>x._2))</code></pre>
-              						The lambda function makes sure we check the second item of the (word, count) pairing, and we also reversed the ordering. This indeed gives us the result we wanted. Let's prettify it a bit:
-              						<pre><code>%spark
-top10.map({case(w,c) => "Word '%s' occurs %d times".format(w,c)}).map(println)</code></pre>
-              						<pre><code>Word 'the' occurs 25378 times
-Word 'I' occurs 20629 times
-Word 'and' occurs 19806 times
-Word 'to' occurs 16966 times
-Word 'of' occurs 16718 times
-Word 'a' occurs 13657 times
-Word 'my' occurs 11443 times
-Word 'in' occurs 10519 times
-Word 'you' occurs 9591 times
-Word 'is' occurs 8335 times
-res9: Array[Unit] = Array((), (), (), (), (), (), (), (), (), ())</code></pre>
-              						Although this doesn't give us too much information as these are just stopwords, at least we got wat we 'wanted'.
-              						</p>
-              						<h2 class="major">How to count?</h2>
-              						<p>
-              						To finish of, we conclude with analysing a more complicated mapper:
-              						</p>
-              						<pre><code>%spark
-val words = lines.flatMap(line => line.split(" "))
-              .map(w => w.toLowerCase().replaceAll("(^[^a-z]+|[^a-z]+$)", ""))
-              .filter(_ != "")
-              .map(w => (w,1))
-              .reduceByKey( _ + _ )</code></pre>
-              						<p>And let's now output the count of occurrences of 'macbeth':</p>
-              						<pre><code>%spark
-words.filter(_._1 == "macbeth").collect
-  .map({case (w,c) => "%s occurs %d times".format(w,c)}).map(println)</code></pre>
-              						<p>Which outputs:</p>
-              						<pre><code>macbeth occurs 285 times
-res20: Array[Unit] = Array(())</code></pre>
-              						<h3>The map</h3>
-              						<p>
-              						Nice, that seems to work, but what does this all do? Let's work from the inner arguments of the mapper outwards. <code>[^a-z]</code> is a regular expression that identifies non-alphabet characters. The ^ and $ signs in <code>(^...$)</code> indicate the start and end of a string. The regular expression as a whole removes(replaces with an empty string) any non-alphabet characters that occur either before the first letter or after the last letter in a word, but preserves non-alphabet characters that occur within a word, like in the word non-alphabet.</p>
-              						<p>
-              						We also mapped al characters to lowercase and removed all empty words.
-              						</p>
+									Apparently the course thinks it's a better idea to move those 45 records to the origin (which I think unneccessarily messes with the mean). Anyway, in this section we have redefined <code>addrDF</code>, accounted for commas (not points) while transitioning x and y from strings to floats, and mapped the missing values to the origin. Anyway, time for some simple Q&A that the teacher expects in this blog:
+									</p><p>
+									Q: Did we use the Dataset or the Dataframe API in the cell above?
+									</p><p>
+									A: We used a Dataset, as we have defined <code>addrDF</code> as a Dataset. <b>Note:</b> we can use <code>.describe()</code> on a Dataset to return a dataframe.
+									</p><p>
+									Q: Why does <code>addrDF.describe().show()</code> still give <code>null</code> values?
+									</p><p>
+									A: Because although strings like street and quarter can be sensibly counted and ranked (to obtain a min and max), they are not numbers so we can't compute a mean or standard deviation of them.
+									</p>
 
-              						<h3>Macbeth</h3>
-              						<p>
-              						Macbeth occurred more often than in the previous wordcount. This can be due to a variety of reasons.
-              						</p>
-              						<ul>
-              							<li>We have removed non-alphabet characters, so "Macbeth" and "Macbeth." are now counted as the same word.</li>
-              							<li>We have mapped all characters to lowercase, so now both "MACBETH" and "Macbeth" are counted as the same word. As we've seen in our inspection of the data corpus in <a href="https://jorisreichert.github.io/bigdata_blog2.html">blogpost 2</a>, the allcaps notation is used indicate when an actor speaks.</li>
-              						</ul>
+									<h3>Top 10 lists: Data Frame Operators VS Using SQL</h3>
+									<p>
+									Say we want to rank the quarters of Nijmegen from largest to smallest and display the top 10. We can do that using data frame operators or using SQL.
+									</p> 
+
+									<p>
+									<i>Disclaimer: This paragraph is about query plans which I don't fully understand so this next part may not be true.</i> Using data frame operators we first did the grouping and counting. The ranking came second. Upon inspecting the query plan, we see that the second query plan looks very similar to the first, but the limit of 10 is applied in both the logical and physical plans. I can imagine this allows for earlier discarding of some data which might speed things up.
+									</p>
+
+									<h4>Data Frame operator code</h4>
+									<p>
+									<pre><code>val qc_1 = addrDF.groupBy("quarter").count.cache()
+val qc_1_top = qc_1.orderBy(col("count").desc).limit(10)
+qc_1_top.show()</code></pre>
+									That's one way of doing it.
+									</p>
+									<h4>SQL code</h4>
+									<p>
+									<pre><code>addrDF.createOrReplaceTempView("addresses")
+val qc_2_top = spark.sql("SELECT quarter, count(quarter) AS qc FROM addresses GROUP BY quarter ORDER BY qc DESC LIMIT 10")
+qc_2_top.show</code></pre>
+									This is another way of doing it. My assignment suggests that there would be an interesting difference in the query plan of these two methods, but I couldn't find it.
+									</p>
+
+									<h2 class="major">A4b - Mapping Data
+									</h2>
+									<p>
+									The second Zeppelin notebook of this week, A4b, introduces us to using a combination of datasets.</p>
+
+									<h3>Ran out of time, probably will be added on Tuesday.</h3>
+
 
               						<i>That's all, folks!</i>
               						I hope reading this blog taught you something new :)
