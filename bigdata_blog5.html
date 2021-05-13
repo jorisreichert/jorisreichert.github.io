@@ -6,7 +6,7 @@
 -->
 <html>
 	<head>
-		<title>RU/BigData-Blog4</title>
+		<title>RU/BigData-Blog5</title>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
 		<link rel="stylesheet" href="assets/css/main.css" />
@@ -44,8 +44,8 @@
 					<section id="wrapper">
 						<header>
 							<div class="inner">
-								<h2>Open Data</h2>
-								<p>Blog #4 for the Big Data course.</p>
+								<h2>Sparkling Streams</h2>
+								<p>Blog #5 for the Big Data course.</p>
 							</div>
 						</header>
 
@@ -55,13 +55,11 @@
 									<h2 class="major">Introduction
 									</h2>
 									<p>
-									Welcome to my fourth blogpost in the Big Data series. This blogpost is written to report my experiences on working with Spark SQL and the Spark Dataframe API in order to explore and analyze Open Data datasets. Just like last blogpost, I worked using Zeppelin Notebooks in the Zeppelin UI.
+									Welcome to my fifth blogpost in the Big Data series. I'm very excited to share this blogpost with you, as the streaming data we will be looking at is (simulated) RuneScape data! As I was AFKing oldschool runescape (gotta craft those blood runes whenever you can) while I found out we will be using this data, I suddenly got more motivated for this assignment than for all previous assignments together. This blogpost is written to report my experiences on working with Spark's Structured Streaming API. Just like the previous two blogposts, I worked using Zeppelin Notebooks in the Zeppelin UI.
 									</p><p>
-									I followed <a href="https://rubigdata.github.io/course/assignments/A4-open-data.html">this assignment</a> that I was given for the Big Data course at the Radboud University. This blogpost however should be readable for anyone who wants to learn something about Spark SQL and the Spark Dataframe API. The notebooks I started with and the ones I ended up with are available on <a href="https://github.com/rubigdata/open-data-2021-jorisreichert">my github</a>.
+									I followed <a href="https://rubigdata.github.io/course/assignments/A5-streaming.html">this assignment</a> that I was given for the Big Data course at the Radboud University. This blogpost however should be readable for anyone who wants to learn something about Spark's Structured Streaming API or enjoy me fangirling about oldschool runescape (<b>osrs</b>). The notebooks I started with and the ones I ended up with are available on <a href="https://github.com/rubigdata/sparkling-streams-2021-jorisreichert">my github</a>.
 									</p>
-									<p>
-									The data we will be working on in this blogpost (as is more closely described in notebook A4a as available on github) is <a href="https://opendata.nijmegen.nl/">open data of the city of Nijmegen</a>.
-									</p>
+
 									<h2 class="major">Getting started
 									</h2>
 									<p>
@@ -76,73 +74,272 @@
 
 
 
-									<h2 class="major">A4a - Data cleaning
+									<h2 class="major">A5
 									</h2>
 									<p>
-									The first Zeppelin notebook of this week, A4a, introduces us to the <code>Spark Dataset</code>, <code>Dataframe</code> and <code>Spark SQL</code>.</p>
+									This week only has one Zeppelin notebook, A5. </p>
 
-									<h3>Real-life data</h3>
+									<h3 class="major">Starting out & Preliminaries</h3>
 									<p>
-									Just like in the Pandas dataframes that I've worked with before, we can use <code>df.show(x)</code> to show the first x rows of dataframe <code>df</code>. This can really help to get an impression of the data you're working with.
+									The introduction mentions it is very easy to get stuck, but I'm relieved there is a step-by-step plan that should solve 99% of the problems. Let's hope I'm not in the 1%. I'm on a drystreak for plenty of items & pets on osrs, so let's not waste my rng on this assignment.
 									</p>
 									<p>
-									Following instruction, we inspected some of the data using:<pre><code>val addrDF = bagdata.select('STRAAT, 'X_COORD, 'Y_COORD, 'WIJK_OMS)
-addrDF.show(5, false)
-addrDF.describe().show()</code></pre>
-									The last of those commands did not manage to give us a mean of either the X or Y coordinate, which may be due to missing values. This is something we can check using <code>addrDF.filter(  $"X_COORD".isNull ).count</code> which showed us that there are 45 records that don't have an x coordinate. To inspect this data, we used
-									</p><code>addrDF.filter( $"X_COORD".isNull ).show(45, false)</code><p>
-									to inspect the street, x, y, and neighbourhood data without truncation. This gave us a well-readable list that showed the absence of an x coordinate is always paired with the absence of a y-coordinate and these records seem to occur all over Nijmegen and not in just one specific neighbourhood. As this has not yet satisfied our hunger for explanation, we also took a look at all columns (this time with truncation for readability) using
-									</p><code>bagdata.filter( $"X_COORD".isNull ).show(45)</code><p>
-									Now, we were able to observe a trend for these records, namely that the value for <code>STATUS</code> would most often be "<code>Niet autenthiek</code>", whatever that means. Because we had no intention of contacting anyone for further clarification and because this data accounted for only such a small amount of records (45/96867), we decided to just filter it away by defining a <code>cleanbagdata</code> that we can use from now on instead of bagdata:<pre><code>val cleanbagdata = bagdata.filter( ! $"X_COORD".isNull )</code></pre>
+									We can take a look at the stream using some console commands given in the notebook. This prints a stream of data in our console, a printscreen of which is given here.</p>
+									<a href="#" class="image"><img src="images/Spark-SQL-stream-data.png" alt="" /></a>
+									<p>
+									In order to work with this stream we have to create a spark dataframe that is tied to the TCP/IP stream on localhost port 9999. We'll call this dataframe <code>socketDF</code> and we can create this using the <code>readStream</code> operation. 
+									<pre><code>val socketDF = spark.readStream
+  .format("socket")
+  .option("host", "0.0.0.0")
+  .option("port", 9999)
+  .load()</code></pre>
+									Now we can use <code>socketDF</code> when we want to obtain data.
 									</p>
 
-									<h3>Schema: using types</h3>
+									<h3 class="major">In-memory stream processing</h3>
 									<p>
-									Apparently the course thinks it's a better idea to move those 45 records to the origin (which I think unneccessarily messes with the mean). Anyway, in this section we have redefined <code>addrDF</code>, accounted for commas (not points) while transitioning x and y from strings to floats, and mapped the missing values to the origin. Anyway, time for some simple Q&A that the teacher expects in this blog:
-									</p><p>
-									Q: Did we use the Dataset or the Dataframe API in the cell above?
-									</p><p>
-									A: We used a Dataset, as we have defined <code>addrDF</code> as a Dataset. <b>Note:</b> we can use <code>.describe()</code> on a Dataset to return a dataframe.
-									</p><p>
-									Q: Why does <code>addrDF.describe().show()</code> still give <code>null</code> values?
-									</p><p>
-									A: Because although strings like street and quarter can be sensibly counted and ranked (to obtain a min and max), they are not numbers so we can't compute a mean or standard deviation of them.
-									</p>
+									When gathering some data in a <code>StreamingQuery</code> called <code>memoryQuery</code>, I didnt't seem to get any data with
+									</p><pre><code>// Setup streamreader
+val streamWriterMem = socketDF
+  .writeStream
+  .outputMode("append")
+  .format("memory")
 
-									<h3>Top 10 lists: Data Frame Operators VS Using SQL</h3>
-									<p>
-									Say we want to rank the quarters of Nijmegen from largest to smallest and display the top 10. We can do that using data frame operators or using SQL.
-									</p> 
+// Start streaming!
+val memoryQuery = streamWriterMem  
+  .queryName("memoryDF")
+  .start()
 
-									<p>
-									<i>Disclaimer: This paragraph is about query plans which I don't fully understand so this next part may not be true.</i> Using data frame operators we first did the grouping and counting. The ranking came second. Upon inspecting the query plan, we see that the second query plan looks very similar to the first, but the limit of 10 is applied in both the logical and physical plans. I can imagine this allows for earlier discarding of some data which might speed things up.
-									</p>
+// Run for 1 second...
+memoryQuery
+  .awaitTermination(1000)
+  
+// ... and stop the query, to avoid filling up memory:
+memoryQuery
+  .stop()</code></pre>
+  									<p>
+  									Luckily, changing the 1 to a 3 (letting the query run for three seconds) gave me something to work with: <code>spark.sql("select count(*) from memoryDF").show()</code> gave me 183 rows to work with:</p>
+  									<a href="#" class="image"><img src="images/Spark-SQL-memoryDF.png" alt="" /></a>
+  									<p>
+  									Now we have a dataframe called <code>memoryDF</code> that contains a three-second fragment of the stream as obtained from the dataframe <code>socketDF</code>.
 
-									<h4>Data Frame operator code</h4>
-									<p>
-									<pre><code>val qc_1 = addrDF.groupBy("quarter").count.cache()
-val qc_1_top = qc_1.orderBy(col("count").desc).limit(10)
-qc_1_top.show()</code></pre>
-									That's one way of doing it.
-									</p>
-									<h4>SQL code</h4>
-									<p>
-									<pre><code>addrDF.createOrReplaceTempView("addresses")
-val qc_2_top = spark.sql("SELECT quarter, count(quarter) AS qc FROM addresses GROUP BY quarter ORDER BY qc DESC LIMIT 10")
-qc_2_top.show</code></pre>
-									This is another way of doing it. My assignment suggests that there would be an interesting difference in the query plan of these two methods, but I couldn't find it.
-									</p>
+  									</p>
+  									<h3 class="major">Parsing the input stream (or rather the stream fragment)</h3>
+  									<p>
+  									There was some code given that allowed us to parse the stream in a way we separate the material of the item and the price. This resulted in having our data in the format:
+  									</p>
+  									<a href="#" class="image"><img src="images/Spark-SQL-material-price.png" alt="" /></a>
+  									<p>
+  									However, as any 'scaper knows, the material is mostly relevant for the alchemy values, not for the market value which is the kind of data we have here. A dragon mace can just be bought at a shop (therefore the market price will always be around the shop value), whereas a dragon chainbody or even dragon warhammer are rare monster drops. So, we also want to process the type of product that is made of the material. As it turns out, we can't use the word 'type' as the name of a type, so we shall name it 'product'.
+  									<ol>
+  										<li>
+  										<ul>
+  											<li>changed the type definition</li>
+  											<li><code>case class RuneData(material: String, price: Integer)</code></li>
+  											<li> into </li>
+  											<li><code>case class RuneData(material: String, product: String, price: Integer)</code></li>
+  										</ul>
+  										</li>
+  										<li>
+  										<ul>
+  											<li>changed the regular expression to parse the strings from</li>
+  											<li><pre><code>val myregex = "\"^([A-Z].+) [A-Z].+ was sold for (\\\\d+)\""
+val q = f"select regexp_extract(value, $myregex%s, 1) as material, cast(regexp_extract(value, $myregex%s, 2) as Integer) as price from memoryDF"
+spark.sql(q).as[RuneData].show(10, false)</code></pre></li>
+											<li>into</li>
+											<li><pre><code>val myregex = "\"^([A-Z].+) ([A-Z].+) was sold for (\\\\d+)\""
+val q = f"select regexp_extract(value, $myregex%s, 1) as material, regexp_extract(value, $myregex%s, 2) as product, cast(regexp_extract(value, $myregex%s, 3) as Integer) as price from memoryDF"
+spark.sql(q).as[RuneData].show(10, false)</code></pre></li>
 
-									<h2 class="major">A4b - Mapping Data
-									</h2>
-									<p>
-									The second Zeppelin notebook of this week, A4b, introduces us to using a combination of datasets.</p>
+  										</ul>
+  										In a more readable form (that is less suited or copy-pasting): We added parentheses around the second <code>[A-Z.+]</code> part in the regex definition, enabling the <code>regexp_extract()</code> function to also obtain this part. In the original code, <code>myregex</code> allowed for the retrieval of two things (the material and the price), however as we now also want to store the product (type) we also had to trivially change our SQL query.
+  										</li>
+  									</ol>
+  									Our new parsing provides us with the following output:
+  									</p>
+  									<a href="#" class="image"><img src="images/Spark-SQL-material-product-price.png" alt="" /></a>
+  									<p>
+  									I think it's awesome that the two dragon items that had such a price discrepancy turned out to be the dragon warhammer (dwh) and dragon mace :D. To be fair, 100k for a dwh is a joke, that thing is more like 25m iirc.
+  									</p>
+  									<h4>What the Regex?</h4>
+  									<p>
+  									So, I mentioned how we had to change the regex for our use, but hardly explained what happened. Let's concisely do so here.
+  									</p>
+  									<p>
+  									A regex (or regular expression) can be used to identify certain parts of a string.
+  									As we could see in the first printscreen of this blog, all streamed data is in the same format: <code>(Material) (Product) was sold for (number)gp</code>.</p>
+  									<p>
+  									All materials and products start with a capital letter, which we can identify using the regex <code>[A-Z]</code>. Because all materials and products can contain more than one letter, we write <code>[A-Z].+</code> to identify a capital letter followed by one or multiple other characters.
+  									</p>
+  									<p>
+  									<code>myregex: String = "^([A-Z].+) ([A-Z].+) was sold for (\\d+)"</code>
+  									This is the regex we used. Note that in the code above it looks slightly different, because in the definition we use backslash a lot to escape special characters.
+  									</p>
+  									<p>
+  									It can be read somewhat similar to a string. It uses " to signal the start and beginning. The text " was sold for " and the spaces between the ')' and '(' characters represent substrings that are expected to look exactly like that. The regex parts (those between parentheses) identify a substring that has certain characteristics, like the one discussed above and the last one that expects a number. Perhaps most importantly for our little change: <b>The parentheses allow for the value to be extracted using the SQL query.</b>
+  									</p>
 
-									<h3>Ran out of time, probably will be added on Tuesday.</h3>
 
+  									<p>
+  									<i>To my fellow 'scapers out there, I just got 85 runecrafting while writing this part. 1/4 of the way to 99! :D</i>
+  									</p>
+
+  									<h3 class="major">Stream processing</h3>
+  									<p>
+  									Here comes the real work. Processing a stream sample was a good way to get started, but now we switch to continuous stream processing.
+  									</p>
+  									<h4>Streaming data</h4>
+  									<p>
+  									We can create and start a streaming query on the same TCP/IP stream that we previously took a sample of.
+  									<pre><code>val consoleQuery = socketDF
+  .writeStream
+  .outputMode("append")
+  .format("console")
+  .start()</code></pre>
+  									Now we can use <code>spark.streams.active</code> to see the top 20 results of our query and the size of the batch. When we run <code>consoleQuery.stop()</code> we end the query. This is similar to what we did when we parsed the input fragment, but there ran it for a predetermined amount of time and we also created a dataframe that stored the results of the query.
+  									</p><p>
+  									In the declaration of <code>consoleQuery</code> we specified the query should be formatted for outputting to the console by using <code>.format("console")</code> whereas with <code>memoryQuery</code> we specified <code>.format("memory")</code>. When storing the results of the query in memory it was also necessary to name this, which we did using the <code>.queryName("memoryDF")</code> function in the code fragment:
+  									<pre><code>val memoryQuery = streamWriterMem  
+  .queryName("memoryDF")
+  .start()</code></pre>
+
+  									 The list of results we get from running <code>spark.streams.active</code> keeps on increasing over time. At some point, my results looked like this:
+  									 </p>
+  									 <a href="#" class="image"><img src="images/Spark-SQL-stream-active.png"/></a>
+  									 <p>
+
+  									 As you can see, this output is clearly not structured. With some alterations we can parse this live stream data similar to how we parsed the <code>memoryDF</code> dataframe.
+
+  									<h4>Structuring the stream data</h4>
+  									<p>
+  									First, we need to register the streaming dataframe <code>socketDF</code> as a temporary view so we can apply SQL commands on it. In the code example below, <code>df</code> would be the name of our streaming dataframe and <code>updates</code> the name of the temporary view. 
+  									<pre><code>df.createOrReplaceTempView("updates")
+spark.sql("select count(*) from updates")  // returns another streaming DF</code></pre>
+									As we have already defined our class <code>RuneData</code> previously, we can now use that in combination with the regex and query we wrote previously. <i>Do note, my beautifully fitting columnname 'product' has been replaced by 'tpe' from here on out.</i> This resulted in us executing the following code fragments:
+									<pre><code>socketDF.createOrReplaceTempView("runeUpdatesDF")</code></pre>
+									<pre><code>case class RuneData(material: String, tpe: String, price: Integer)</code></pre>
+									<pre><code>val myregex = "\"^([A-Z].+) ([A-Z].+) was sold for (\\\\d+)\""
+val q = f"select regexp_extract(value, $myregex%s, 1) as material, regexp_extract(value, $myregex%s, 2) as tpe, cast(regexp_extract(value, $myregex%s, 3) as Integer) as price from runeUpdatesDF"
+
+val runes = spark.sql(q).as[RuneData]</code></pre>
+									<pre><code>val rConsoleQuery = runes
+  .writeStream
+  .outputMode("append")
+  .format("console")
+  .start()</code></pre>
+									The last of which started our querystream again, this time named <code>rConsoleQuery</code>. We let this stream run for a small while (hence batch size of 651) and took a look at it using <code>spark.streams.active</code>.
+  									</p>
+  									<a href="#" class="image"><img src="images/Spark-SQL-stream-active-structured.png"/></a>
+  									<p>
+  									Now that's more like it!
+  									</p>
+  									<h3 class="major">Writing output to disk</h3>
+  									<p>
+  									Now we've been writing the stream output to memory and to console, but often it makes most sense to write it to a disk. All the work we've done so far was not in vain, as now we can write the stream data in a structured manner as it comes in. Writing to console and memory were good ways to check our regex and parsing.
+  									</p>
+  									<p>
+  									To write to disk we need to:
+  									<ol>
+	  									<li>Create a directory to write the data in<pre><code>%sh
+mkdir -p /opt/hadoop/share/runedata</code></pre> </li>
+	  									<li>Setup a writer to copy the query output to disk (this writer writes to disk every two seconds) <pre><code>val streamWriterDisk = runes
+  .writeStream
+  .outputMode("append")
+  .option("checkpointLocation", "file:///tmp/checkpoint")
+  .trigger(Trigger.ProcessingTime("2 seconds"))</code></pre> </li>
+	  									<li>Start the query <pre><code>val stream2disk = streamWriterDisk
+  .start("file:///opt/hadoop/share/runedata")</code></pre> </li>
+	  									<li>Check if it's running <pre><a href="#" class="image"><img src="images/Spark-stream-active.png"/></a></pre> </li>
+	  									<li>Regularly check the amount of data written to disk <pre><a href="#" class="image"><img src="images/Spark-stream-wrote-3mb.png"/></a></pre> </li>
+	  									<li>Stop the stream after a while using <code>stream2disk.stop()</code>. I did so after collecting 3mb of data.</li>
+  									</ol>
+  									Woohoo, we did it!
+  									</p>
+
+  									<h4>Checkpointing</h4>
+  									<p>
+  									According to the assignment <i>"Checkpointing is what is needed for fault-tolerance in an operational streaming setting. I’d be happy if you’d dive into it, but it’s ok for now to just take that for granted. Roughly, because we defined a trigger on this query, every other second a checkpoint should have been created, and a microbatch written to disk."</i>
+  									</p>
+  									<p>
+  									I've ran the given code and saw that there were 274 checkpoints in my data. Because we wrote every two seconds, this implies I ran the stream for over 9 minutes, which I definitely didn't. Looking at the execution times of the start and stop codeblocks, I ran it for 2 minutes and 19 seconds (or 139 seconds). It seems like a checkpoint has been made far more often than the 'every other second' we wrote to disk. It'd be interesting to find out why this is the case or what happened exactly, but I found that to be more extensive than what this blog should cover. If any reader <b><i>(looking at you, peer reviewers)</i></b> knows more about this, please let me know! :D
+  									</p>
+  									<a href="#" class="image"><img src="images/Spark-SQL-checkpoints.png"/></a>
+
+  									<h3 class="major">Working with the collected data</h3>
+  									<p>
+  									So, now that we have 3mb of generated runescape market data, let's do something with it. Similar to assignment 3B we can analyse the data on disk using the Dataframe API.
+  									<pre><code>val runes = spark
+  .read
+  .parquet("file:///opt/hadoop/share/runedata/part-*")
+  .createOrReplaceTempView("runes")</code></pre>
+  									Now we can just use SQL to SELECT something <code>FROM runes</code>. Time to dust off that SQL knowledge of >5 years ago. 
+  									</p>
+
+  									<h4>An OSRS market insight</h4>
+  									<p>
+  										Even though I play OSRS as an Ironman (meaning you can't trade and have to unlock and acquire everything yourself), I'm sure I can say some relevant things about the market and purchasing items from the Grand Exchange.
+  									</p>
+  									<p>
+  										Combat is a large aspect of Runescape, and for simplicity sake (I assume) our datastream only contained (metal) melee weaponry. Until recently there were only a few useful weapons (of those that were made of the standard metals). Those were the Scimitar (of every material) and some other weapons of Dragon metal. This was largely due to the the scimitar being the only melee 4-tick weapon, meaning it was at least 25% faster than any other weapon. Recently this was changed and now the Mace is also a 4-tick weapon. Although the accuracy stats and strength stats still slightly differ, the mace has become way more viable. If the mace would be cheaper than the scimitar, it could provide us with a good alternative to it. Let's see how the Mace and Scimitar average prices differ accross materials.
+  										<pre><code>SELECT material, tpe, avg(price)
+FROM runes
+WHERE tpe="Scimitar" OR tpe="Mace"
+GROUP BY material, tpe
+ORDER BY material</code></pre>
+  										Now we could look at a table output of this, but as we're working in a jupyter notebook we might as well easily click a button (in the top-left of the printscreen) and drag three fields to obtain a beautiful line graph. Hovering over the material columns shows the exact prices in an overlay, but unfortunately I was not able to capture this in my screenshot.
+  									</p>
+  										<a href="#" class="image"><img src="images/Spark-SQL-mace-vs-scimmy.png" style="max-width:100%"></a>
+  									<p>
+  										Looking at this data we see that on average a mace is always cheaper than a scimitar of the same material, making it a decent cheaper alternative.
+  									</p>
+  									<p>
+  										<i>
+  											Did you know that you can actually use an API to acquire data from the Grand Exchange? More about this "Grand Exchange Database API" is written <a href="https://runescape.wiki/w/Application_programming_interface#Grand_Exchange_Database_API">here</a>. Do note that if you want to work with oldschool data you have to replace every occurrence of <code>itemdb_rs</code> with <code>itemdb_oldschool</code>
+  										</i>
+  									</p>
+
+  									<h4>The required SQL queries</h4>
+  									<p>
+  									In the assignment we were asked to at the very least provide queries that answer three questions, which I've done here. Compared to the query above, these are all fairly trivial. I've also added printscreens of the output.
+  									<ul>
+	  									<li>
+	  										How many rune items were sold?
+	  										<pre><code>%sql
+-- Number of Rune items sold
+SELECT COUNT(*)
+FROM runes
+WHERE material="Rune"</code></pre>
+<a href="#" class="image"><img src="images/Spark-SQL-mandatory-1.png" style="max-width:100%"></a>
+	  									</li>
+	  									<li>
+	  										How many of each item type was sold? (the ordering was not required but added for readability)
+	  										<pre><code>%sql
+-- Amount of sold items per item type
+SELECT tpe, count(*)
+FROM runes
+GROUP BY tpe
+ORDER BY count(*) DESC</code></pre>
+<a href="#" class="image"><img src="images/Spark-SQL-mandatory-2.png" style="max-width:100%"></a>
+	  									</li>
+	  									<li>
+	  										How much gold was spent buying swords?
+	  										<pre><code>%sql
+--total gold spend buying swords
+--Not sure what is meant with 'swords', so I'll cover these four:
+--'Sword', 'Longsword', 'Two-handed sword', 'Scimitar' 
+SELECT tpe, SUM(price)
+FROM runes
+WHERE tpe='Sword' OR tpe='Longsword' OR tpe='Two-handed sword' OR tpe='Scimitar'
+GROUP BY tpe
+ORDER BY SUM(price) DESC</code></pre>
+<a href="#" class="image"><img src="images/Spark-SQL-mandatory-3.png" style="max-width:100%"></a>
+	  									</li>
+  									</ul>
+  									Funnily enough, the Two-handed sword was the type of sword that was sold least frequently, while by far most gold was spend buying it (almost twice as much as on scimitars). It does make sense that more expensive items are traded less frequently, I guess.
+  									</p>
 
               						<i>That's all, folks!</i>
-              						I hope reading this blog taught you something new :)
+              						I hope reading this blog taught you something new. If not about Big Data then at least about Oldschool Runescape :)
               						<h4>To the peers giving feedback: I really appreciate extensive/in-depth feedback!! :D</h4>
 
 
