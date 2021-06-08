@@ -127,8 +127,16 @@ wb.take(50).foreach(println)</code></pre>
 
                   <h2 class="major">Instructions part 2: Standalone Program</h2>
                   <p>
-                  So far we have only used Spark inside Zeppelin Notebooks, in a very user-friendly interactive setting. As the concept of interactive notebooks does not work well with the concept of a cluster shared by many people, we want to convert our Zeppelin Notebook to a standalone application that we can run on the cluster. 
+                  So far we have used Spark inside Zeppelin Notebooks, in a very user-friendly and interactive setting. As the concept of interactive notebooks does not work well with the concept of a cluster shared by many people, we want to convert our Zeppelin Notebook to a standalone application that we can run on the cluster. 
                   </p>
+
+                  <p>
+                  While our container (<code>cc</code>) is still running, we can use <code>sudo docker exec -it cc /bin/bash</code> to obtain a shell inside our docker container. In this container we navigate to a folder called <code>rubigdata</code> that I've also added to <a href="https://github.com/rubigdata/cc-2021-jorisreichert"> my github</a>. Inside, we find the two inputs required to build a trivial sample app. The scala code is found in <code>RUBigDataApp.scala</code> and the information on how it can be built into a self-contained app can be found in <code>build.sbt</code>. The <code>target</code> subfolder contains the standalone app that we created, which can be executed by running: <pre><code>spark-submit target/scala-2.12/rubigdataapp_2.12-1.0.jar</code></pre>
+                  </p>
+
+                  <p>
+                  We are provided with some commands to make a <i>fat jar</i> (a java archive that includes all its dependencies) of the sample app. To practice, let's write a small app that works with a stream of data, just like we had <a href="./bigdata_blog5.html">in blogpost five</a>, but this we compile it as a standalone app.
+
 
                   <h2><i>In Progress</i></h2>
 
