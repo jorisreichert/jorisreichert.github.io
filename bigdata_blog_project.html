@@ -63,6 +63,7 @@
                   </ol>
                   Luckily, we're still provided with instructions (in three parts) to help us get started on the project.
                   </p>
+                  <p>The code produced can be found on <a href="https://github.com/rubigdata/cc-2021-jorisreichert">this github page</a>, the assignments I followed can be found under <b>P: Final project</b>, parts I through III: <a href="https://rubigdata.github.io/course/index.html">here</a>.</p>
 
                   <h2 class="major">Instructions part 1: WARC files in Spark</h2>
                   <h3>Preliminaries</h3>
@@ -135,16 +136,86 @@ wb.take(50).foreach(println)</code></pre>
                   </p>
 
                   <p>
-                  We are provided with some commands to make a <i>fat jar</i> (a java archive that includes all its dependencies) of the sample app. To practice, let's write a small app that works with a stream of data, just like we had <a href="./bigdata_blog5.html">in blogpost five</a>, but this we compile it as a standalone app.
+                  We are provided with some commands to make a <i>fat jar</i> (a java archive that includes all its dependencies) of the sample app. How this all works when you have a cluster to work with will be discussed in Instructions part 3. After that, we will write our own small app, build it, deploy it to the cluster and reason about the results.
+
+                  <h2 class="major">Instructions part 3: Cluster REDBAD</h2>
+                  <p>
+                  On to bigger and better things: the educational REDBAD cluster. We have to establish a vpn connection to the university to use this cluster. Configuring it wasn't too hard. For personal future reference: we can start it from our user directory using <code>sudo openvpn openvpn-ca-science.ovpn</code>.
+                  </p>
+                  <p>
+                  The cc docker container was short lived as we again have to use a new container for working with the cluster. We will keep it up for now though, as viewing through and working in the notebook might prove usefull along the line. First, we set up our github username in an environment variable and then we create and start the docker container.
+                  <pre><code>export GITHUB_USERNAME="jorisreichert"
+sudo docker create --name redbad -e HADOOP_USER_NAME=${GITHUB_USERNAME} -it rubigdata/redbad
+sudo docker start redbad
+                  </code></pre>
+                  Now we can attach to the cluster and obtain shell access using <code>docker attach redbad</code>.
+                  </p>
+                  <p>
+                  As with many parts of this course, we are again provided with a beautifully well-prepared docker environment. I suppose it makes sense as I imagine there will only be need for a few people setting up clusters while we are being taught how to use those environments. Anyway, let's get started with running our example program on the cluster.
+                  </p>
+                  <p>
+                  <pre><code>hdfs dfs -put rubigdata-test.txt /user/${HADOOP_USER_NAME}
+hdfs dfs -ls /user/${HADOOP_USER_NAME}</code></pre>
+                  This puts our testfile in hdfs and lets us check if it's really there. Next we edit the example program to use the textfile we just put in hdfs.
+                  <pre><code>nano src/main/scala/org/rubigdata/RUBigDataApp.scala</code></pre>
+                  It's hidden in a few folders, but we found it. This scala program reads its data from a filename stored in variable fnm, which we have adapted to:
+                  <pre><code> val fnm = s"hdfs:///user/jorisreichert/rubigdata-test.txt"</code></pre>
+                  For our real app we should of course use the data found at <code>hdfs:///single-warc-segment</code>.
+                  After our adaptation we can build and submit our program very similarly to what we've done in Part 2. 
+                  <pre><code>sbt assembly
+spark-submit --deploy-mode cluster --queue default target/scala-2.12/RUBigDataApp-assembly-1.0.jar</code></pre>
+                  The output can be found <a href="http://rbdata01.cs.ru.nl:19888/jobhistory/logs/rbdata03:38547/container_e02_1623272363921_1667_01_000001/container_e02_1623272363921_1667_01_000001/jorisreichert/stdout?start=-4096">here</a>, where we got by navigating to <a href="http://rbdata01.cs.ru.nl:18080/">http://rbdata01.cs.ru.nl:18080/</a>, clicking our app ID, going to the 'Executors' tab, and click on the 'stdout' log of our driver (the Executor with Executor ID 'driver').
+                  </p>
+                  <h2 class="major">Part 4: scraping some mailaddresses</h2>
+                  <p>
+                  Now, after having learned how we can deploy a basic scala program to the cluster, it's time for some real work. Now, what kind of program would be useful?
+                  </p><p>
+                  Some time ago I was part of a workgroup that attempted to improve the mental wellbeing of students by searching some students that were willing to aid and meet up with any students that had difficulties in life without really knowing who to talk to. For this project we set up a webpage so people could get in touch with the 'aiding students'. After some time however, all the 'aiding students' got a huge influx in spam email. We suspected their mailaddresses had been scraped from the website, which got me interested in trying this on the webcrawl. If all goes well we might be able to expand in any of the following ways:
+                  <ul>
+                  <li>Rank occurring email addresses by domain name</li>
+                  <li>Compare usage of 'own-domain' email addresses within a domain to more generic email providers (e.g. compare the occurrence of @ru.nl and @gmail.com within the webpages of the ru domain)</li>
+                  <li>calculate the maximum and average amount of email addresses on webpages</li>
+                  </ul>
+                  </p>
+                  <p>
+                  So, we've wrote some scala code. We put it in the same folder as our <code>RUBigDataApp.scala</code> our hdfs by using / pasting it in nano. In order to build it, we've changed the first line of  <code>build.sbt</code> from <code>name            := "RUBigDataApp"</code> to <code>name            := "GimmeDemMails"</code> and hope this works.
+                  </p>
+                  <h3>Version 1: Opening a WARC file on the cluster and counting the warc records.</h3>
+                  <p>
+                  In <code>GimmeDemMails.scala</code> we wrote the following base program that we will improve on iteratively. It's in image format partly to disencourage plagiarism and partly because of readability provided by nano's colouring.
+                  <a href="#" class="image"><img src="images/bigdata-project-01-sanity-check.png" style="max-width:100%" alt="" /></a>
+                  </p>
+                  <p>
+                  The program was compiled and submitted to the cluster. The output can be found <a href="http://rbdata01.cs.ru.nl:19888/jobhistory/logs/rbdata02:38689/container_e02_1623272363921_1698_01_000001/container_e02_1623272363921_1698_01_000001/jorisreichert/stdout?start=-4096">here</a>.
+                  </p>
+                  <h3>Version 2: Taking some a href targets with context</h3>
+                  <p>Next we cleverly combine the code we used in part one to make a triple of (website the link occurred on, the target of the href, the text used to describe the link). Of course we commented out the sanity check.
+                  <a href="#" class="image"><img src="images/bigdata-project-02-triple.png" style="max-width:100%" alt="" /></a>
+                  <i>Sidenote on the workflow explaining the change of editor: As working with nano became tedious I used gedit from here onwards and just pasted all the code in the nano editor. Small compilation errors were then fixed in nano.</i>
+                  </p>
+                  <p>
+                  This program was also compiled and submitted to the cluster. The output can be found <a href="http://rbdata01.cs.ru.nl:19888/jobhistory/logs/rbdata09:35353/container_e02_1623272363921_1714_01_000001/container_e02_1623272363921_1714_01_000001/jorisreichert/stdout/?start=0&start.time=0&end.time=9223372036854775807">here</a>.
+                  </p>
+                  <h3>Version 3: Filtering for email addresses</h3>
+                  <p>
+                  Directly following on <code>flatMap(identity)</code> I added:
+                  <pre><code>.
+        filter{case (u,a,t) => a matches "$@%.$"}</code></pre>
+                  </p><p>
+                  This filter with a regex should filter out all triples of which the link does not point to a mail address. This program was also compiled and submitted to the cluster. <a href="http://rbdata01.cs.ru.nl:18080/history/application_1623272363921_1787/1/jobs/">This job</a> however gave some more 'interesting' results. <a href="http://rbdata01.cs.ru.nl:19888/jobhistory/logs/rbdata03:38547/container_e02_1623272363921_1787_01_000001/container_e02_1623272363921_1787_01_000001/jorisreichert/stdout?start=-4096">The output</a> is empty...
+                  </p><p>
+                  Our regex seems to be fine when tested against a few examples however, so this would lead us to assume this WARC file did not include any pages that had a clickable mail link like <code>a href = "mailto:abc@example.com"</code>. The next step would be to either check the entire body of webpages or to check more than one warc file at a time.
 
 
-                  <h2><i>In Progress</i></h2>
+
+
+
+                  <h4><i>For now though, I think this concludes what is expected of us for this practical assignment.</i></h4>
 
   									<!-- <a href="#" class="image"><img src="images/Spark-SQL-stream-active-structured.png"/></a> -->
   										<!-- <a href="#" class="image"><img src="images/Spark-SQL-mace-vs-scimmy.png" style="max-width:100%"></a> -->
   									
-      						<i>That's all, folks!</i>
-      						I hope reading this blog taught you something new :)
+      						<i>If I misunderstood this I'll happily continue working on this for the resit. If not I might continue working on this anyway (after the deadline, as long as the cluster remains available) because I found it pretty interesting and enjoyable to do something with the knowledge I gained in FP.
       						<!-- <h4>To the peers giving feedback: I really appreciate extensive/in-depth feedback!! :D</h4> -->
 
 
